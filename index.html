@@ -23,6 +23,9 @@
   /* Etiqueta: 54 x 25 mm (Dymo 2112283, apaisada) */
   .lbl { width:54mm; height:25mm; background:var(--card); position:relative; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.25); }
   #sheet .lbl { transform:scale(1.6); transform-origin:top left; margin:0 calc(54mm * .6) calc(25mm * .6) 0; }
+  .in { position:absolute; left:0; top:0; width:54mm; height:25mm; }
+  .aj { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#c9d1d9; }
+  .aj input[type=number] { width:58px; font:inherit; padding:6px; border-radius:6px; border:0; }
   .qr { position:absolute; left:1mm; top:1.5mm; width:22mm; height:22mm; }
   .qr svg { width:100%; height:100%; display:block; }
   .txt { position:absolute; left:24mm; top:1.5mm; width:29mm; }
@@ -30,18 +33,22 @@
   .l { font-size:7.5pt; line-height:3.05mm; color:#000; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; max-height:6.1mm; word-break:break-word; }
   .b { font-weight:700; margin-top:1mm; }
   .c { margin-top:1mm; -webkit-line-clamp:1; max-height:3.05mm; white-space:nowrap; }
-  @page { size:54mm 25mm; margin:0; }
   @media print {
     body { background:#fff; }
     header, .help { display:none !important; }
     #sheet { display:block; padding:0; gap:0; }
-    #sheet .lbl { transform:none; margin:0; box-shadow:none; page-break-after:always; break-after:page; }
+    html, body { margin:0 !important; padding:0 !important; }
+    #sheet .lbl { transform:none; margin:0; box-shadow:none; height:24.8mm; page-break-after:always; break-after:page; page-break-inside:avoid; }
+    #sheet .lbl .in { transform:translate(var(--dx,0mm), var(--dy,0mm)); }
+    body.girar #sheet .lbl { width:25mm; height:53.8mm; }
+    body.girar #sheet .lbl .in { transform:translate(calc(25mm + var(--dx,0mm)), var(--dy,0mm)) rotate(90deg); transform-origin:top left; }
     #sheet .lbl.off { display:none; }
     #sheet .lbl.last { page-break-after:auto; break-after:auto; }
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#1c2228; --muted:#aab3bd; } }
   :root[data-theme="dark"] { --bg:#1c2228; --muted:#aab3bd; }
 </style>
+<style id="pgsz">@page { size:54mm 25mm; margin:0; }</style>
 </head>
 <body>
 <header>
@@ -49,10 +56,11 @@
   <span class="info" id="cnt"></span>
   <button class="sel" id="btnAll" type="button">Todas</button>
   <button class="sel" id="btnNone" type="button">Ninguna</button>
+  <span class="aj" title="Si al imprimir salen desplazadas, corrige aquí (milímetros). Se guarda en este equipo.">Ajuste ↔ <input id="adx" type="number" step="0.5" value="0"> mm &nbsp;↕ <input id="ady" type="number" step="0.5" value="0"> mm <label><input type="checkbox" id="agi"> Girar</label></span>
   <button id="btnPrint" type="button">Imprimir</button>
   <button id="btnClose" type="button">Cerrar</button>
 </header>
-<div class="help">En el diálogo de impresión: impresora <b>DYMO LabelWriter 550 Turbo</b>, márgenes <b>Ninguno</b>, escala <b>100&nbsp;%</b>. Una etiqueta por unidad. Toca una etiqueta para quitarla o volver a incluirla (para reimprimir solo una unidad, pulsa «Ninguna» y toca la que necesites).</div>
+<div class="help">En el diálogo de impresión: impresora <b>DYMO LabelWriter 550 Turbo</b>, márgenes <b>Ninguno</b>, escala <b>100&nbsp;%</b>. Una etiqueta por unidad. <b>Si salen desplazadas</b>: corrige con «Ajuste» (↔ positivo mueve a la derecha, ↕ positivo baja) y vuelve a imprimir una de prueba; si salen giradas o cortadas a lo largo, marca «Girar». El ajuste se queda guardado en este equipo. Toca una etiqueta para quitarla o volver a incluirla (para reimprimir solo una unidad, pulsa «Ninguna» y toca la que necesites).</div>
 <div id="sheet"></div>
 <script>
 //---------------------------------------------------------------------
@@ -2380,11 +2388,11 @@ var qrcode = function() {
     for (var i = 1; i <= t; i++) {
       if (only && i !== only) continue;
       var payload = 'DOINN|' + p + '|' + cod + '|' + nom + '|' + i + '/' + t;
-      html += '<div class="lbl"><div class="qr">' + qrSvg(payload) + '</div><div class="txt">' +
+      html += '<div class="lbl"><div class="in"><div class="qr">' + qrSvg(payload) + '</div><div class="txt">' +
         '<img class="logo" src="' + LOGO + '" alt="Doinn">' +
         '<div class="l">' + esc(p + ' ' + n) + '</div>' +
         '<div class="l b">' + esc(nom) + '</div>' +
-        '<div class="l c">' + esc(cod + ' · ' + i + '/' + t) + '</div></div></div>';
+        '<div class="l c">' + esc(cod + ' · ' + i + '/' + t) + '</div></div></div></div>';
       total++;
     }
   });
@@ -2401,6 +2409,20 @@ var qrcode = function() {
   document.getElementById('btnAll').onclick = function(){ lbls.forEach(function(l){ l.classList.remove('off'); }); upd(); };
   document.getElementById('btnNone').onclick = function(){ lbls.forEach(function(l){ l.classList.add('off'); }); upd(); };
   upd();
+  var aj = { dx:0, dy:0, g:false }; try { aj = Object.assign(aj, JSON.parse(localStorage.getItem('doinn_etq_ajuste') || '{}')); } catch(_){}
+  var $dx = document.getElementById('adx'), $dy = document.getElementById('ady'), $g = document.getElementById('agi');
+  function aplica(){
+    document.documentElement.style.setProperty('--dx', (+aj.dx || 0) + 'mm');
+    document.documentElement.style.setProperty('--dy', (+aj.dy || 0) + 'mm');
+    document.body.classList.toggle('girar', !!aj.g);
+    document.getElementById('pgsz').textContent = '@page { size:' + (aj.g ? '25mm 54mm' : '54mm 25mm') + '; margin:0; }';
+    try { localStorage.setItem('doinn_etq_ajuste', JSON.stringify(aj)); } catch(_){}
+  }
+  $dx.value = aj.dx; $dy.value = aj.dy; $g.checked = !!aj.g;
+  $dx.oninput = function(){ aj.dx = parseFloat($dx.value) || 0; aplica(); };
+  $dy.oninput = function(){ aj.dy = parseFloat($dy.value) || 0; aplica(); };
+  $g.onchange = function(){ aj.g = $g.checked; aplica(); };
+  aplica();
   document.getElementById('btnPrint').onclick = function(){ window.print(); };
   document.getElementById('btnClose').onclick = function(){ window.close(); };
   if (auto) setTimeout(function(){ window.print(); }, 400);
